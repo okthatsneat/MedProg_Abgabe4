@@ -2,23 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include "mypgm.h"
 
 #define STRINGBUF 1024
 #define SPACE 32
 #define LINEBREAK 10
 #define CHAR_P 80
 #define CHAR_5 53
-
-typedef unsigned char byte; // einen neuen Daten-Typ-Bezeichner "byte" definiert. 
-
-typedef struct image {
-	char pgmType[2]; // P5 for binary PGM 
-	char ** comments; // not mandatory
-	unsigned short width;
-	unsigned short height; 
-	byte ** data; // datamatrix for greyvalues
-	unsigned short depth; // max grey value (255)
-} Image;
 
 unsigned short LoadPGM(FILE * inFile, Image * inImg) {
 	
@@ -33,15 +23,15 @@ unsigned short LoadPGM(FILE * inFile, Image * inImg) {
 	while ((c = fgetc(inFile)) != LINEBREAK) {
 
 	if( position == 1 && !(c == CHAR_P) ) {
-		printf("argument is not binary PGM file> fail"); 
+		printf("argument is not binary PGM file> fail\n"); 
 		return 1;
 	}
 
 	if( position == 2 && !(c == CHAR_5) ) {
-		printf("argument is not binary PGM file> fail"); 
+		printf("argument is not binary PGM file> fail\n"); 
 		return 1; 
 	}
-	inImag.pgmType[position-1] = c;
+	inImg->pgmType[position-1] = c;
 	position ++; 
 	}
 
@@ -54,55 +44,65 @@ unsigned short LoadPGM(FILE * inFile, Image * inImg) {
 
 	// now we're at the width. 32 is space, so read till 32 for width, and then till newline(=10) for height. 
  	// construct the byte array that is the width byte by byte. 
-	position=1; 
+	position=0; 
 	// dirty fix> have to figure out how to determine the size of the bytearray sometime. this will only work if i know the values in advance... 
-	char soonAnInt[]="0000"; 
+	char soonAnInt[STRINGBUF];
+	memset(&soonAnInt[0], 0, sizeof(soonAnInt));
 	while ((c = fgetc(inFile)) != SPACE){
-	soonAnInt[position] = c; 
-	position++; 
+		soonAnInt[position] = c; 
+		position++;
+		if(position > STRINGBUF) {
+				//freak out
+		} 
 	}
-	inImg.width = atoi(soonAnInt);
+	inImg->width = atoi(soonAnInt);
 
 	/********************************************************************************************/
 	// now the height
 	// reset position and char array helpers
-	position=1; 
+	position=0; 
 	memset(&soonAnInt[0], 0, sizeof(soonAnInt));
 	// and again, only here till line break 
 	while ((c = fgetc(inFile)) != LINEBREAK){
 		soonAnInt[position] = c; 
 		position++;
 	}
-	inImg.height = atoi(soonAnInt);
+	inImg->height = atoi(soonAnInt);
 
 	/********************************************************************************************/
 	// now we're getting the depth info, 255 / ignore till next newline 
-	position=1; 
+	position=0; 
 	memset(&soonAnInt[0], 0, sizeof(soonAnInt));
 	while ((c = fgetc(inFile)) != LINEBREAK){
 		soonAnInt[position] = c; 
 		position++;
 	}
-	inImg.depth = atoi(soonAnInt);
+	inImg->depth = atoi(soonAnInt);
 	/********************************************************************************************/
 
 	/********************************************************************************************/
 	// allocate memory for inImg bytes
-	long i=0,j=0;
+	int i=0,j=0;
 	// Allocation
-	inImg.data = (byte **) malloc(inImg.height*sizeof(byte *));
-	for(i=0;i<inImg.height;i++){
-	  	inImg.data[i]=(byte *) malloc(inImg.width*sizeof(byte));
+	inImg->data = (byte **) malloc(inImg->height*sizeof(byte*));
+	for(i=0;i<inImg->height;i++){
+	  	inImg->data[i]=(byte *) malloc(inImg->width*sizeof(byte));
 	}
 	/********************************************************************************************/
 	// fill data with values
-	while ((c = fgetc(inFile)) != EOF) {
-		for(i=0;i<height;i++){
-			for(j=0;j<width;j++){
-				inImg.data[i][j]=c;
+	
+	for(i=0;i<inImg->height;i++) {
+		//runs once for every line
+		for(j=0;j<inImg->width;j++) {
+			//runs once for every pixel inside that line, for each line.
+			if ((c = fgetc(inFile)) != EOF) {
+				inImg->data[i][j] = c;
+			} else {
+				inImg->data[i][j] = 0;
 			}
 		}
 	}
+
 
 	return 0; 
 } 
@@ -113,8 +113,8 @@ unsigned short SavePGM(FILE * outFile, Image * outImg){
 	
 	// convert chars in pgmtype to int
 	
-	fputc( atoi(outImg.pgmType[0]), outFile );
-	fputc( atoi(outImg.pgmType[1]), outFile );
+	fputc( outImg->pgmType[0], outFile );
+	fputc( outImg->pgmType[1], outFile );
 	fputc(LINEBREAK, outFile); 
 	
 	
@@ -122,30 +122,22 @@ unsigned short SavePGM(FILE * outFile, Image * outImg){
 	
 	// width and height delimited by space
 	
-	fputc(atoi(outImg.width), outFile );
-	fputc(SPACE, outFile); 
-	fputc(atoi(outImg.height), outFile );
-	fputc(LINEBREAK, outFile); 
+	fprintf(outFile, "%i %i", outImg->width, outImg->height );
+	fputc(LINEBREAK, outFile);
 	
-	// bitdepth
+	// bit depth
 	
-	fputc(atoi(outImg.depth), outFile );
+	fprintf(outFile, "%i", outImg->depth );
 	fputc(LINEBREAK, outFile);
 	
 	// pixel byte data
 	
-	for(int i=0;i<outImg.height;i++){
-		for(int j=0;j<outImg.width;j++){
-			fputc(atoi(outImg.data[i][j]), outFile); 
+	for(int i=0;i<outImg->height;i++){
+		for(int j=0;j<outImg->width;j++){
+			fputc(outImg->data[i][j], outFile); 
+			printf("writing data[%i][%i] to file (%1x)\n", i,j,(unsigned)(unsigned char)outImg->data[i][j]); 
 		}
 	}
-	
-	/**************************dealloc************************************************************/
-	for(int i=0;i<height;i++){
-		free(outImg.data[i]);
-	}
-	free(outImg.data);
-	/********************************************************************************************/
 	
 	fclose(outFile); 
 	
@@ -158,37 +150,39 @@ unsigned short NormPGM(Image * inImg, Image * outImg){
 	int maxVal=0; 
 	int minVal=0; 
 	
-	for(int i=0;i<inImg.height;i++){
-		for(int j=0;j<inImg.width;j++){
-			int val = atoi(inImg.data[i][j]); 
-			if maxVal<val {
+	for(int i=0;i<inImg->height;i++){
+		for(int j=0;j<inImg->width;j++){
+			int val = inImg->data[i][j]; 
+			if (maxVal < val) {
 				 maxVal = val;
 			}
-			if minVal>val {
+			if (minVal > val) {
 				 minVal = val;
 			}
 		}
 	}
+	
+	// allocate memory for outImg!!
 	
 	// normalize algorithm
 	
 	int oldRange = maxVal-minVal; 
 	int val=0; 
 	int scale=0; 
-	for(int i=0;i<inImg.height;i++){
-		for(int j=0;j<inImg.width;j++){
-			val = atoi(inImg.data[i][j]); 
+	for(int i=0;i<inImg->height;i++){
+		for(int j=0;j<inImg->width;j++){
+			val = inImg->data[i][j]; 
 			scale = (val-minVal/oldRange); 
-			val = inImg.depth*scale; 
-			outImg.data[i][j] = (char *) val;
+			val = inImg->depth*scale; 
+			outImg->data[i][j] = val;
 		}
 	}
 	
 	/**************************dealloc************************************************************/
-	for(int i=0;i<height;i++){
-		free(inImg.data[i]);
+	for(int i=0;i<inImg->height;i++){
+		free(inImg->data[i]);
 	}
-	free(inImg.data);
+	free(inImg->data);
 	/********************************************************************************************/
 	
 	return 1; 
@@ -196,21 +190,32 @@ unsigned short NormPGM(Image * inImg, Image * outImg){
 
 unsigned short InvertPGM(Image * inImg, Image * outImg){
 	
-	for(int i=0;i<inImg.height;i++){
-		for(int j=0;j<inImg.width;j++){
-			val = atoi(inImg.data[i][j]); 
-			outImg.data[i][j] = (char *) inImg.depth-val;
+	for(int i=0;i<inImg->height;i++){
+		for(int j=0;j<inImg->width;j++){
+			int val = inImg->data[i][j]; 
+			outImg->data[i][j] = inImg->depth-val;
 		}
 	}
 	
 	/**************************dealloc************************************************************/
-	for(int i=0;i<height;i++){
-		free(inImg.data[i]);
+	for(int i=0;i<inImg->height;i++){
+		free(inImg->data[i]);
 	}
-	free(inImg.data);
+	free(inImg->data);
 	/********************************************************************************************/
 	
 	return 1; 
 }
 
+Image* NewPGM() {
+	return calloc(1,sizeof(Image));
+}
+
+void FreePGM(Image* image) {
+		// free any stuff pointed to by a struct Image
+		for(int i=0;i<image->height;i++){
+			free(image->data[i]);
+		}
+		free(image->data);
+}
 
