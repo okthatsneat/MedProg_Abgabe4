@@ -102,8 +102,6 @@ unsigned short LoadPGM(FILE * inFile, Image * inImg) {
 			}
 		}
 	}
-
-
 	return 0; 
 } 
 
@@ -135,7 +133,7 @@ unsigned short SavePGM(FILE * outFile, Image * outImg){
 	for(int i=0;i<outImg->height;i++){
 		for(int j=0;j<outImg->width;j++){
 			fputc(outImg->data[i][j], outFile); 
-			printf("writing data[%i][%i] to file (%1x)\n", i,j,(unsigned)(unsigned char)outImg->data[i][j]); 
+			//printf("writing data[%i][%i] to file (%1x)\n", i,j,(unsigned)(unsigned char)outImg->data[i][j]); 
 		}
 	}
 	
@@ -144,14 +142,48 @@ unsigned short SavePGM(FILE * outFile, Image * outImg){
 	return 1; 
 }
 
+
+unsigned short PrintPGM(Image * outImg){
+	
+	// first put the pgm type info, followed by a LINEBREAK
+	
+	// convert chars in pgmtype to int
+	
+	putchar(outImg->pgmType[0]);
+	putchar(outImg->pgmType[1]);
+	putchar(LINEBREAK); 
+	
+	
+	// width and height delimited by space
+	
+	printf("%i %i", outImg->width, outImg->height );
+	putchar(LINEBREAK);
+	
+	// bit depth
+	
+	printf("%i", outImg->depth );
+	putchar(LINEBREAK);
+	
+	// pixel byte data
+	
+	for(int i=0;i<outImg->height;i++){
+		for(int j=0;j<outImg->width;j++){
+			putchar(outImg->data[i][j]); 
+		}
+	}	
+	return 1; 
+}
+
 unsigned short NormPGM(Image * inImg, Image * outImg){
+	
+	int i,j;
 	
 	// determine min and max values of inImg
 	int maxVal=0; 
 	int minVal=0; 
 	
-	for(int i=0;i<inImg->height;i++){
-		for(int j=0;j<inImg->width;j++){
+	for(i=0;i<inImg->height;i++){
+		for(j=0;j<inImg->width;j++){
 			int val = inImg->data[i][j]; 
 			if (maxVal < val) {
 				 maxVal = val;
@@ -161,50 +193,59 @@ unsigned short NormPGM(Image * inImg, Image * outImg){
 			}
 		}
 	}
+		
+	// Allocation
+	outImg->data = (byte **) malloc(inImg->height*sizeof(byte*));
+	for(i=0;i<inImg->height;i++){
+	  	outImg->data[i]=(byte *) malloc(inImg->width*sizeof(byte));
+	}
 	
-	// allocate memory for outImg!!
-	
+
+	// copy other metadata from inImg to outImg
+	outImg->width = inImg->width; 
+	outImg->height = inImg->height;
+	outImg->depth = inImg->depth;
+	outImg->pgmType[0] = inImg->pgmType[0];
+	outImg->pgmType[1] = inImg->pgmType[1];
 	// normalize algorithm
 	
 	int oldRange = maxVal-minVal; 
 	int val=0; 
-	int scale=0; 
 	for(int i=0;i<inImg->height;i++){
 		for(int j=0;j<inImg->width;j++){
 			val = inImg->data[i][j]; 
-			scale = (val-minVal/oldRange); 
-			val = inImg->depth*scale; 
-			outImg->data[i][j] = val;
+			outImg->data[i][j] = (val-minVal)*(inImg->depth/oldRange);
+			//printf("normalizing old val %i to %i (%i reduction)\n",val,outImg->data[i][j],(val-outImg->data[i][j]));
 		}
 	}
-	
-	/**************************dealloc************************************************************/
-	for(int i=0;i<inImg->height;i++){
-		free(inImg->data[i]);
-	}
-	free(inImg->data);
-	/********************************************************************************************/
 	
 	return 1; 
 }
 
 unsigned short InvertPGM(Image * inImg, Image * outImg){
+
+	int i,j;
+
+	// Allocation
+	outImg->data = (byte **) malloc(inImg->height*sizeof(byte*));
+	for(i=0;i<inImg->height;i++){
+	  	outImg->data[i]=(byte *) malloc(inImg->width*sizeof(byte));
+	}
+
+	// copy other metadata from inImg to outImg
+	outImg->width = inImg->width; 
+	outImg->height = inImg->height;
+	outImg->depth = inImg->depth;
+	outImg->pgmType[0] = inImg->pgmType[0];
+	outImg->pgmType[1] = inImg->pgmType[1];
 	
-	for(int i=0;i<inImg->height;i++){
-		for(int j=0;j<inImg->width;j++){
-			int val = inImg->data[i][j]; 
-			outImg->data[i][j] = inImg->depth-val;
+	for(i=0;i<inImg->height;i++){
+		for(j=0;j<inImg->width;j++){
+			outImg->data[i][j] = inImg->depth - inImg->data[i][j];
 		}
 	}
 	
-	/**************************dealloc************************************************************/
-	for(int i=0;i<inImg->height;i++){
-		free(inImg->data[i]);
-	}
-	free(inImg->data);
-	/********************************************************************************************/
-	
-	return 1; 
+	return 1;
 }
 
 Image* NewPGM() {
